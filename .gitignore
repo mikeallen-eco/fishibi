@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.txt
+*.png
+/writing
+/data
+.DS_Store
