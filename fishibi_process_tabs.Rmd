@@ -1,0 +1,13 @@
+# load libraries and data
+```{r}
+library(dplyr)
+
+f <- read.table("data/merged.uni.c10.l140.L190.cln.tag.ann.srt.tab2.txt", 
+                sep="\t", header=TRUE) %>%
+  select(-starts_with("obiclean"),-id,-definition) %>%
+  rename(best_id = starts_with("best_id")) %>%
+  select(rank, order_name, family_name, species_name, scientific_name, 
+         count, match = best_id, starts_with("sample"), sequence)
+
+```
+
