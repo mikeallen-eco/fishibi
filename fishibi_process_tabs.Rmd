@@ -4,15 +4,58 @@ library(dplyr)
 library(readxl)
 '%notin%' <- Negate('%in%')
 
-# read in raw reads file from obitools
-f <- read.table("data/merged.uni.c10.l140.L190.cln.tag.ann.srt.tab2.txt", 
+# read in raw reads file from obitools (EMBL)
+fe <- read.table("data/merged.uni.c10.l140.L190.cln.tag.ann.srt.tab2.txt", 
                 sep="\t", header=TRUE) %>%
   select(-starts_with("obiclean"),-id,-definition) %>%
   rename(best_id = starts_with("best_id")) %>%
-  select(rank, order_name, family_name, species_name, scientific_name, 
-         count, match = best_id, starts_with("sample"), sequence)
+  select(e.rank = rank, e.order = order_name, e.family = family_name, e.genus = genus_name, e.species = species_name, 
+         e.sci = scientific_name, 
+         e.match = best_id, count, starts_with("sample"), sequence)
 
 # write.csv(f, file = "output/raw_fish_table.csv", row.names = F)
+
+# read in raw reads file from obitools (GENBANK)
+fg <- read.table("data/merged.uni.c10.l140.L190.cln.tag.ann.srt.gb.tab.txt", 
+                sep="\t", header=TRUE) %>%
+  select(-starts_with("obiclean"),-id,-definition) %>%
+  rename(best_id = starts_with("best_id")) %>%
+  select(g.rank = rank, g.order = order_name, g.family = family_name, g.genus = genus_name, g.species = species_name, 
+         g.sci = scientific_name, 
+         g.match = best_id, count, starts_with("sample"), sequence)
+
+# same? yes.
+sum(as.matrix(fg[,9:130]) - as.matrix(fe[,9:130]))
+
+# combine EMBL and GenBank
+f <- fe %>%
+  left_join(select(fg, -count, -starts_with("sample")), by = "sequence") %>%
+  select(g.rank, e.rank, g.order, e.order, g.family, e.family, g.genus, e.genus, 
+         g.species, e.species, g.sci, e.sci, 
+         g.match, e.match, count, starts_with("sample"), sequence) %>%
+  mutate(bestdb = case_when(g.match > e.match ~ "GenBank",
+                            e.match > g.match ~ "EMBL",
+                            g.match == e.match ~ "Same"),
+         b.rank = case_when(g.match > e.match ~ g.rank,
+                            e.match > g.match ~ e.rank,
+                            (e.match == g.match) & (e.rank == g.rank) ~ g.rank,
+                            (e.match == g.match) & (e.rank != g.rank) ~ "ranks differ"),
+         b.match = case_when(g.match > e.match ~ g.match,
+                             TRUE ~ e.match),
+         b.order = case_when((g.match > e.match) ~ g.order,
+                             TRUE ~ e.order),
+         b.family = case_when((g.match > e.family) ~ g.family,
+                             TRUE ~ e.family),
+         b.genus = case_when((g.match > e.match) ~ g.genus,
+                             TRUE ~ e.genus),
+         b.species = case_when((g.match > e.match) ~ g.species,
+                             TRUE ~ e.species),
+         b.sci = case_when((g.match > e.match) ~ g.sci,
+                             TRUE ~ e.sci)) %>%
+  select(bestdb, b.match, b.rank, b.order, b.family, b.genus, b.species, b.sci, 
+         count, starts_with("sample"), sequence, g.rank, e.rank, g.order, 
+         e.order, g.family, e.family, g.genus, e.genus, 
+         g.species, e.species, g.sci, e.sci, g.match, e.match) 
 
 # read in sample data file
 s <- read_xlsx("data/1 2022 NJDEP eDNA Sample Log FINAL_ No Highlights.xlsx") %>%
@@ -31,41 +74,59 @@ cols <- data.frame(sample = colnames(select(f, starts_with("sample.")))) %>%
   mutate(real_names = ifelse(is.na(real_names), sample, real_names))
 
 # change sample codes in raw reads table to real sample names
-colnames(f)[8:129] <- cols$real_names
+colnames(f) # check to make sure the right columns are being changed!
+colnames(f)[10:131] <- cols$real_names
 f$seqid <- paste0("seq",1:nrow(f))
 
 # select out just the samples
 fs <- f %>%
-  select(seqid, rank, order_name, family_name, species_name, scientific_name, 
-         count, match, starts_with("eDNA"), sequence)
-sum(select(fs, starts_with("eDNA")))
+  select(seqid, bestdb, b.match, b.rank, b.order, b.family, b.genus, b.species, b.sci, 
+         count, starts_with("eDNA"), g.rank, e.rank, g.order, 
+         e.order, g.family, e.family, g.genus, e.genus, 
+         g.species, e.species, g.sci, e.sci, g.match, e.match, sequence)  %>%
+  select(-ends_with("-B"))
+
+# sum the reads across all samples
+sum(select(fs, starts_with("eDNA"))) # 8005382
 
 # select out just the negatives
 fn <- f %>%
-  select(seqid, rank, order_name, family_name, species_name, scientific_name, 
-         count, match, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), sequence)
-sum(select(fn, starts_with("ENC"), starts_with("FNC"), starts_with("PCR")))
+  select(seqid, bestdb, b.match, b.rank, b.order, b.family, b.genus, b.species, b.sci, 
+         count, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_with("-B"), g.rank, e.rank, g.order, 
+         e.order, g.family, e.family, g.genus, e.genus, 
+         g.species, e.species, g.sci, e.sci, g.match, e.match, sequence)
 
-# select out just the "extra samples"
-fe <- f %>%
-  select(seqid, rank, order_name, family_name, species_name, scientific_name, 
-         count, match, starts_with("sample."), sequence)
+# sum the reads across all negatives
+sum(select(fn, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_with("-B"))) # 188343
 
+# write.csv(fs, file = "output/fish2023.samples.step0.nofilters.csv", row.names = F)
+# write.csv(fn, file = "output/fish2023.negatives.step0.nofilters.csv", row.names = F)
 ```
 # remove humans, mice, and non-fish
 ```{r}
 # filter out non-fish - samples
 fs2 <- fs %>%
-  filter(order_name %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
-                              "Passeriformes", "Pelecaniformes"))
-sum(select(fs2, starts_with("eDNA")))
+  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
+                              "Passeriformes", "Pelecaniformes"),
+         !is.na(b.order))
+sum(select(fs2, starts_with("eDNA"))) # 7528742
 
 # filter out non-fish - negatives
 fn2 <- fn %>%
-  filter(order_name %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
-                              "Passeriformes", "Pelecaniformes"))
+  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
+                              "Passeriformes", "Pelecaniformes"),
+         !is.na(b.order))
 
-fn2$seqmax <- apply(fn2[,9:17],1, max)
+# sum the reads across all negatives
+sum(select(fn2, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_with("-B"))) # 27111
+
+# get the max read count of each seqid present in the negatives
+colnames(fn2)
+fn2$seqmax <- apply(fn2[,11:38],1, max)
+
+# write.csv(fs2, file = "output/fish2023.samples.step1.onlyfish.csv", row.names = F)
+# write.csv(fn2, file = "output/fish2023.negatives.step1.onlyfish.csv", row.names = F)
+
 
 ```
 # subtract contamination found in negative controls
@@ -75,18 +136,22 @@ fs3a <- fs2 %>%
   left_join(select(fn2, seqid, seqmax), by = "seqid")
 fs3 <- fs3a
 
-colnames(fs3) # 9:92 are the samples
+colnames(fs3) # 11:75 are the samples
 
 # zero out samples with less reads of a sequence than the max contamination among negative of that sequence
-for(i in 9:92){
+for(i in 11:75){
   tmp <- fs3a[,i] - fs3a$seqmax
   tmp2 <- as.numeric(ifelse(tmp<0,0,tmp))
   fs3[,i] <- tmp2
 }
 
 # count remaining reads in samples
-sum(select(fs3, starts_with("eDNA")))
+sum(select(fs3, starts_with("eDNA")), na.rm = T) # 6589382
+rm(fs3a)
 
+# write.csv(fs3, file = "output/fish2023.samples.step2.onlyfish.negsub.csv", row.names = F)
+
+hist(nchar(fs3$sequence))
 
 ```
 
