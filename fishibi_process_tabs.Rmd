@@ -33,29 +33,37 @@ f <- fe %>%
   select(g.rank, e.rank, g.order, e.order, g.family, e.family, g.genus, e.genus, 
          g.species, e.species, g.sci, e.sci, 
          g.match, e.match, count, starts_with("sample"), sequence) %>%
-  mutate(bestdb = case_when(g.match > e.match ~ "GenBank",
-                            e.match > g.match ~ "EMBL",
-                            g.match == e.match ~ "Same"),
-         b.rank = case_when(g.match > e.match ~ g.rank,
-                            e.match > g.match ~ e.rank,
-                            (e.match == g.match) & (e.rank == g.rank) ~ g.rank,
-                            (e.match == g.match) & (e.rank != g.rank) ~ "ranks differ"),
-         b.match = case_when(g.match > e.match ~ g.match,
+  mutate(bestdb1 = case_when((is.na(g.species)<=is.na(e.species)) & (g.match >= e.match) ~ "GenBank",
+                            (is.na(g.species)>is.na(e.species)) & (g.match >= e.match) ~ "EMBL",
+                            (is.na(e.species)<=is.na(g.species)) & (e.match >= g.match) ~ "EMBL",
+                            (is.na(e.species)>is.na(g.species)) & (e.match >= g.match) ~ "GenBank")) %>%
+  # fix the few cases where the rules above picked the wrong data.base
+      # I found those by looking for where db rank was finer but match was < 0.02 worse
+  mutate(bestdb = case_when(g.genus == "Bubo" ~ "EMBL",
+                            g.genus == "Gyrinophilus" ~ "EMBL",
+                            TRUE ~ bestdb1)) %>%
+  # populate the "best database" taxonomy
+  mutate(b.rank = case_when(bestdb == "Genbank" ~ g.rank,
+                            TRUE ~ e.rank),
+         b.match = case_when(bestdb == "GenBank" ~ g.match,
                              TRUE ~ e.match),
-         b.order = case_when((g.match > e.match) ~ g.order,
+         b.order = case_when(bestdb == "GenBank" ~ g.order,
                              TRUE ~ e.order),
-         b.family = case_when((g.match > e.family) ~ g.family,
+         b.family = case_when(bestdb == "GenBank" ~ g.family,
                              TRUE ~ e.family),
-         b.genus = case_when((g.match > e.match) ~ g.genus,
+         b.genus = case_when(bestdb == "GenBank" ~ g.genus,
                              TRUE ~ e.genus),
-         b.species = case_when((g.match > e.match) ~ g.species,
+         b.species = case_when(bestdb == "GenBank" ~ g.species,
                              TRUE ~ e.species),
-         b.sci = case_when((g.match > e.match) ~ g.sci,
-                             TRUE ~ e.sci)) %>%
+         b.sci = case_when(bestdb == "GenBank" ~ g.sci,
+                             TRUE ~ e.sci),
+         flag= case_when(((g.match - e.match) > 0.02) & (bestdb == "EMBL") ~ "Y",
+                          ((e.match - g.match) > 0.02) & (bestdb == "GenBank") ~ "Y",
+                         TRUE ~ "N")) %>%
   select(bestdb, b.match, b.rank, b.order, b.family, b.genus, b.species, b.sci, 
          count, starts_with("sample"), sequence, g.rank, e.rank, g.order, 
          e.order, g.family, e.family, g.genus, e.genus, 
-         g.species, e.species, g.sci, e.sci, g.match, e.match) 
+         g.species, e.species, g.sci, e.sci, g.match, e.match, flag) 
 
 # read in sample data file
 s <- read_xlsx("data/1 2022 NJDEP eDNA Sample Log FINAL_ No Highlights.xlsx") %>%
@@ -106,19 +114,23 @@ sum(select(fn, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_
 ```{r}
 # filter out non-fish - samples
 fs2 <- fs %>%
-  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
-                              "Passeriformes", "Pelecaniformes"),
+  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", 
+                           "Caudata", "Galliformes", "Testudines",
+                              "Passeriformes", "Pelecaniformes",
+                           "Artiodactyla", "Carnivora"),
          !is.na(b.order))
-sum(select(fs2, starts_with("eDNA"))) # 7528742
+sum(select(fs2, starts_with("eDNA"))) # 7523139
 
 # filter out non-fish - negatives
 fn2 <- fn %>%
-  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", "Caudata", "Galliformes", "Testudines",
-                              "Passeriformes", "Pelecaniformes"),
+  filter(b.order %notin% c("Primates", "Rodentia", "Anseriformes", 
+                           "Caudata", "Galliformes", "Testudines",
+                              "Passeriformes", "Pelecaniformes",
+                           "Artiodactyla", "Carnivora"),
          !is.na(b.order))
 
 # sum the reads across all negatives
-sum(select(fn2, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_with("-B"))) # 27111
+sum(select(fn2, starts_with("ENC"), starts_with("FNC"), starts_with("PCR"), ends_with("-B"))) # 26041
 
 # get the max read count of each seqid present in the negatives
 colnames(fn2)
@@ -146,12 +158,38 @@ for(i in 11:75){
 }
 
 # count remaining reads in samples
-sum(select(fs3, starts_with("eDNA")), na.rm = T) # 6589382
+sum(select(fs3, starts_with("eDNA")), na.rm = T) # 6584391
 rm(fs3a)
 
 # write.csv(fs3, file = "output/fish2023.samples.step2.onlyfish.negsub.csv", row.names = F)
 
+# look at sequence lengths
 hist(nchar(fs3$sequence))
+
+# possible BLAST candidates
+to_blast = fs3 %>% 
+  filter(b.match > 0.8, is.na(b.species)) %>% 
+  select(1:10, sequence) %>%
+  arrange(desc(b.match))
+# write.csv(to_blast, file = "output/fish2023.BLAST.candidates.csv", row.names = F)
+
+# table of number of sequences per ID 
+tables <- table(fs3$b.sci) %>% 
+  data.frame() %>%
+  rename(ecotagID = 1,
+         round1 = 2)
+ # write.csv(tables, "output/fish_seq_ID_table.csv")
+
+tables_crabs <- read.csv("output/fish_seq_ID_table_crabs.csv") %>%
+  select(-1) %>%
+   rename(ecotagID = 1,
+          round2 = 2)
+
+bothtables <- tables %>%
+  full_join(tables_crabs) %>%
+  arrange(ecotagID) %>%
+  tidyr::replace_na(list(round1 = 0, round2 = 0))
+# write.csv(bothtables, "output/fish_seq_ID_table_bothtables.csv")
 
 ```
 
