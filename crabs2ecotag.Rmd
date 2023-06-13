@@ -1,6 +1,5 @@
 # Note: all of this code is adapted from:
 https://github.com/metabarpark/R_scripts_querying_databases/blob/master/get_Reference_Database_from_BOLD.R
-
 # load pacakges
 ```{r}
 library(dplyr)
@@ -23,6 +22,8 @@ if (!file.exists(paste(taxdir,"nodes.dmp",sep=""))) {
 
 # input the path to the CRABS output reference file
 crab_db_filepath <- "data/combined.fish.reference.may23.pcr.sin.pga.tax.fix.uni.cln.tsv"
+# crab_db_filepath <- "data/NJ_fish_ref.tsv" # local version
+# crab_db_filepath <- "data/NJ_plus_exotics_only_fish_ref.tsv" # NJ only local version
 
 # Load the database and add the taxonomic ranks
 crab_db <- fread(crab_db_filepath, sep="\t", head=T) %>%
@@ -33,6 +34,8 @@ crab_db$rank <- getrank(crab_db$taxid,taxdir)
 
 # Define names for the output files]]
 output_ref_db <- "data/combined.fish.reference.may23.pcr.sin.pga.tax.fix.uni.cln.fasta"
+# output_ref_db <- "data/NJlocal.fish.reference.may23.pcr.sin.pga.tax.fix.uni.cln.fasta"
+# output_ref_db <- "data/NJ_plus_exotics_local.fish.reference.may23.pcr.sin.pga.tax.fix.uni.cln.fasta"
 
 # Delete previous files
 db_ref_file <- file(output_ref_db,open = "wt")

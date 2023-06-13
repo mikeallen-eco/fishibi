@@ -185,11 +185,17 @@ tables_crabs <- read.csv("output/fish_seq_ID_table_crabs.csv") %>%
    rename(ecotagID = 1,
           round2 = 2)
 
+tables_crabs_localNYNJPAex <- 
+  read.csv("output/fish_seq_ID_table_crabs_localNYNJPAex.csv") %>%
+  select(-1) %>%
+  rename(ecotagID = 1, round3NYNJPAex = 2)
+
 bothtables <- tables %>%
   full_join(tables_crabs) %>%
+  full_join(tables_crabs_localNYNJPAex) %>%
   arrange(ecotagID) %>%
-  tidyr::replace_na(list(round1 = 0, round2 = 0))
-# write.csv(bothtables, "output/fish_seq_ID_table_bothtables.csv")
+  tidyr::replace_na(list(round1 = 0, round2 = 0, round3NYNJPAex = 0))
+# write.csv(bothtables, "output/fish_seq_ID_table_3way.csv")
 
 ```
 
