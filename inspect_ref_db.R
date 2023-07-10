@@ -40,6 +40,7 @@ loc <- read.csv("data/local_fish_list.csv") %>%
                              species == "Phoxinus_eos" ~ "Chrosomus_eos",
                              species == "Phoxinus_neogaeus" ~ "Chrosomus_neogaeus",
                              species == "Rubricatochromis bimaculatus" ~ "Rubricatochromis_bimaculatus",
+                             species == "Lethenteron_appendix" ~ "Lampetra_appendix",
                              TRUE ~ species)) %>%
   # remove redundant typos
   filter(species %notin% c("Cottus_bairdiI", "Channa_Argus", "Acipenser_oxyrhynchus",
@@ -91,12 +92,12 @@ loc.seqs.njex <- loc.njex %>%
 
 # how many total species on our local list have a ref sequence in the database?
 loc.seqs.uni <- distinct(select(loc.seqs, species, numseq))
-sum(loc.seqs.uni$numseq==0) # 56 of 311 species on list have no ref sequence
+sum(loc.seqs.uni$numseq==0) # 55 of 311 species on list have no ref sequence
 test <- loc.seqs.uni[loc.seqs.uni$numseq==0,]
 
 # how many total species on our VERY local NJEX list have a ref sequence in the database?
 loc.seqs.njex.uni <- distinct(select(loc.seqs.njex, species, numseq)) # nrow = 157
-sum(loc.seqs.njex.uni$numseq==0) # 26 of 157 species on list have no ref sequence
+sum(loc.seqs.njex.uni$numseq==0) # 25 of 157 species on list have no ref sequence
 test <- loc.seqs.njex.uni[loc.seqs.njex.uni$numseq==0,]
 
 # how many NJ species list aren't in NJ/PA/NY/exotics ref database?
@@ -108,12 +109,22 @@ nj.seqs[nj.seqs$numseq==0,]$Common.Name
 nj.seqs.njex <- loc.seqs.njex[loc.seqs.njex$state_list=="NJ",] # 86 NJ species total
 # write.csv(nj.seqs, "data/nj_reference_sequences.csv", row.names = F)
 nj.seqs.njex[nj.seqs.njex$numseq==0,]$Common.Name
-# these NJ species aren't on the list...
-# [1] "Mud Sunfish"            "Satinfin Shiner"        "Blackbanded Sunfish"   
-# [4] "Banded Sunfish"         "Swamp Darter"           "Banded Killifish"      
-# [7] "American Brook Lamprey" "Comely Shiner"          "Swallowtail Shiner"    
-# [10] "Margined Madtom"   
-# note: Satinfin Shiner and Margined Mattom are in the broader BLAST database (can add to local one)
+# these 9 NJ species aren't on the list of sequences included in the refrerence database...
+# "Mud Sunfish"            "Satinfin Shiner"        "Blackbanded Sunfish"   
+# "Banded Sunfish"         "Swamp Darter"           "Banded Killifish"      
+# "Comely Shiner"          "Swallowtail Shiner"    
+# "Margined Madtom"   
+nj.seqs.njex[nj.seqs.njex$numseq==0,]$species
+# "Acantharchus_pomotis"*   "Cyprinella_analostana"  "Enneacanthus_chaetodon"* 
+# "Enneacanthus_obesus"*    "Etheostoma_fusiforme"* "Fundulus_diaphanus"     
+# "Notropis_amoenus"*       "Notropis_procne"*        "Noturus_insignis" 
+# note: Satinfin Shiner, Margined Madtom, & Banded Killifish are in the broader BLAST database (can add to local one)
+# another note: A. Brook Lamprey IS in the database, 
+    # but it didn't make it in this time as the NJDEP website has an alternate scientific name
+      # "Lethenteron appendix" instead of "Lampetra appendix"
+      # I fixed this code, so it will be in the local db in future runs
+# all 4 would have been picked up by BLAST
+# of the other 6, all but Mud Sunfish have a congener in GenBank
 
 # subset just NY/PA/NJ/exotic fish species plus all non-fish vertebrates
 flv <- f %>%
